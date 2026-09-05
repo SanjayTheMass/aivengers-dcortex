@@ -1,7 +1,7 @@
 # Agentic Crew Ops Advisor (aivengers-dcortex)
 
 AI-driven operational advisor for airline Crew Control. Natural-language (text **and voice**)
-interface over a **deterministic legality engine** — the LLM never does arithmetic; every
+interface over a **deterministic legality engine** - the LLM never does arithmetic; every
 duty-hour, FDP, rest and certification check is exact SQL/Python, grounded in the dataset.
 On top of answers, the system takes **agentic action**: it proposes database-changing
 operations (record sick call, apply cover, cancel flights) that execute **only after
@@ -61,12 +61,12 @@ Plus crew profiles, pairings, costs, rules and risk signals — 12 lookup tools 
 
 ### Tier 2 — Consequence & Simulation ✅
 
-| Scenario | Tool |
-|---|---|
-| Captain called in sick — which flights are uncrewed? | `simulate_sick_call` → uncrewed flights, broken pairing, downstream rule risks, passengers affected |
-| Move FO C-2087 onto a pairing — any breach? | `simulate_reassignment` → per-rule verdicts with exact margins |
-| Station closed 08:00–14:00Z — impact? | `simulate_station_closure` |
-| Delay / cancellation ripple | `simulate_delay`, `simulate_cancellation` |
+| Scenario                                             | Tool |
+|------------------------------------------------------|---|
+| Captain called in sick - which flights are uncrewed? | `simulate_sick_call` → uncrewed flights, broken pairing, downstream rule risks, passengers affected |
+| Move FO C-2087 onto a pairing - any breach?          | `simulate_reassignment` → per-rule verdicts with exact margins |
+| Station closed 08:00–14:00Z - impact?                | `simulate_station_closure` |
+| Delay / cancellation ripple                          | `simulate_delay`, `simulate_cancellation` |
 
 Output matches the expected Tier 2 shape: uncrewed flights, `pairing_broken`,
 `downstream_risks` with rule IDs and exact overage ("would exceed 60h/7d by 1h20m"),
@@ -74,7 +74,7 @@ and passenger counts.
 
 ### Tier 3 — Recommendation & Action ✅
 
-**"Captain C-1042 is out — what should I do?"** → `recommend_cover` returns **ranked,
+**"Captain C-1042 is out - what should I do?"** → `recommend_cover` returns **ranked,
 rule-compliant options with cost, legality status, reachability and reasoning**:
 
 1. Own-base reserve callout (cheapest, no delay)
@@ -111,9 +111,9 @@ state**, but a strict approval gate ensures nothing runs without a human decisio
 
 **Flow:**
 
-1. The agent *proposes* — `propose_record_sick_call`, `propose_apply_cover`,
+1. The agent *proposes* - `propose_record_sick_call`, `propose_apply_cover`,
    `propose_cancel_pairing_flights` create a `pending_actions` row. The tool result
-   explicitly tells the model "NOT applied yet — the user must approve".
+   explicitly tells the model "NOT applied yet - the user must approve".
 2. The UI surfaces a **Pending action card** with the summary, action name and params,
    and **Yes, apply / No, reject** buttons.
 3. Only on **approve** does the executor in `engine/actions.py` touch `crewops.db`.
@@ -130,17 +130,17 @@ human authorizes → audit trail records → revert guarantees safety during dem
 
 ## Additional features
 
-- **Voice in / voice out** — browser speech recognition for input, TTS for spoken
+- **Voice in / voice out** - browser speech recognition for input, TTS for spoken
   summaries (the agent produces a separate concise spoken answer).
-- **Multi-turn, multi-chat sessions** — persistent conversations stored server-side,
+- **Multi-turn, multi-chat sessions** - persistent conversations stored server-side,
   rename/clear/delete, auto-titling from the first message.
-- **Reasoning trace on every non-trivial answer** — full tool-call transparency.
-- **Provider-agnostic AI** — any OpenAI-compatible endpoint (GitHub Models, OpenAI,
+- **Reasoning trace on every non-trivial answer** - full tool-call transparency.
+- **Provider-agnostic AI** - any OpenAI-compatible endpoint (GitHub Models, OpenAI,
   Anthropic, Gemini, Ollama) via three `.env` values.
-- **Two frontends** — deployed React app (Vercel) + Streamlit for local demos.
-- **Cloud deployment** — FastAPI on EC2 under systemd (`deploy/setup-ec2.sh`), React
+- **Two frontends** - deployed React app (Vercel) + Streamlit for local demos.
+- **Cloud deployment** - FastAPI on EC2 under systemd (`deploy/setup-ec2.sh`), React
   on Vercel with an `/api` rewrite (no CORS exposure).
-- **Verified against the dataset** — `tests/test_answers.py` replays `questions.json`
+- **Verified against the dataset** - `tests/test_answers.py` replays `questions.json`
   answer keys through the engine: **20/20 pass**; `tests/test_scenarios.py` replays the
   worked disruption scenarios.
 
