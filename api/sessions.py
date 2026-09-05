@@ -1,12 +1,19 @@
-"""Session + chat-history store (tables auto-created in crewops.db)."""
+"""Session + chat-history store (tables auto-created in appstate.db).
+
+Kept separate from crewops.db so reverting the operational DB to its
+pristine backup never touches chat history or the change log.
+"""
 import json
+import sqlite3
 import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from engine.db import get_con, rows
+from engine.db import rows
+
+APPSTATE_PATH = Path(__file__).resolve().parents[1] / "appstate.db"
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS chat_sessions (
@@ -25,6 +32,24 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_msgs_session ON chat_messages(session_id, id);
+CREATE TABLE IF NOT EXISTS pending_actions (
+    id TEXT PRIMARY KEY,
+    session_id TEXT,
+    action TEXT NOT NULL,
+    params TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+    created_at TEXT NOT NULL,
+    resolved_at TEXT
+);
+CREATE TABLE IF NOT EXISTS change_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    action_id TEXT,
+    action TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    changes TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
 """
 
 
@@ -33,7 +58,8 @@ def _now():
 
 
 def _con():
-    con = get_con()
+    con = sqlite3.connect(APPSTATE_PATH)
+    con.row_factory = sqlite3.Row
     con.executescript(_DDL)
     con.execute("PRAGMA foreign_keys = ON")
     return con

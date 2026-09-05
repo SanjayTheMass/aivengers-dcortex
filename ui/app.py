@@ -12,8 +12,12 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from api import actions as actions_store
 from api import sessions as store
 from api.agent import run_turn, split_spoken, MODEL, BASE_URL
+from engine.actions import ensure_backup
+
+ensure_backup()  # pristine crewops_bkp.db snapshot (created once, never changed)
 
 st.set_page_config(page_title="Crew Ops Advisor", page_icon="X", layout="wide")
 
@@ -60,6 +64,30 @@ with st.sidebar:
 
     st.header("Voice")
     voice_out = st.toggle("Speak answers aloud", value=True)
+
+    st.header("Database")
+    log = actions_store.change_log()
+    if log:
+        with st.expander(f"Change log - {len(log)} change(s)"):
+            for c in log:
+                st.markdown(f"**{c['summary']}**  \n_{c['created_at']}_")
+                st.json(c["changes"], expanded=False)
+    else:
+        st.caption("No changes applied - database is pristine.")
+    if log and st.button("Revert to original DB", use_container_width=True):
+        st.session_state.confirm_revert = True
+    if st.session_state.get("confirm_revert"):
+        st.warning("Restore crewops.db from crewops_bkp.db and clear the change log?")
+        c1, c2 = st.columns(2)
+        if c1.button("Yes, revert", type="primary"):
+            r = actions_store.revert()
+            st.session_state.confirm_revert = False
+            st.toast(r.get("summary", r.get("error", "")))
+            st.rerun()
+        if c2.button("No, keep changes"):
+            st.session_state.confirm_revert = False
+            st.rerun()
+
     st.header("Try asking")
     for q in [
         "Who is on reserve at BLR on 2026-09-15?",
@@ -81,6 +109,29 @@ for m in history:
                 for t in m["tool_trace"]:
                     st.markdown(f"**{t['tool']}** `{json.dumps(t['args'])}`")
                     st.json(t["result"], expanded=False)
+
+# ---- pending actions: the human-in-the-loop gate ----
+pending = actions_store.list_pending()
+if pending:
+    st.subheader("Pending actions - your approval required")
+    for a in pending:
+        with st.container(border=True):
+            st.markdown(f"**{a['summary']}**")
+            st.caption(f"action: `{a['action']}` - params: `{json.dumps(a['params'])}`")
+            c1, c2 = st.columns(2)
+            if c1.button("Yes, apply", key=f"yes-{a['id']}", type="primary"):
+                r = actions_store.approve(a["id"])
+                if r["status"] == "applied":
+                    store.add_message(sid, "assistant",
+                                      f"APPLIED: {r['summary']}\n\n"
+                                      f"Logged {len(r['changes'])} change(s) to the change log.")
+                else:
+                    store.add_message(sid, "assistant", f"NOT applied: {r['error']}")
+                st.rerun()
+            if c2.button("No, reject", key=f"no-{a['id']}"):
+                actions_store.reject(a["id"])
+                store.add_message(sid, "assistant", f"Rejected: {a['summary']} - no changes made.")
+                st.rerun()
 
 # ---- voice input (browser speech recognition) ----
 try:
@@ -121,3 +172,5 @@ if prompt:
                 const u = new SpeechSynthesisUtterance({say});
                 u.rate = 1.05; speechSynthesis.cancel(); speechSynthesis.speak(u);
             </script>""", height=0)
+        if actions_store.list_pending():
+            st.rerun()  # surface the approval buttons right away

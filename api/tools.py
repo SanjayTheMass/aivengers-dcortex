@@ -121,7 +121,44 @@ TOOLS = [
          "callout_utc": {"type": "string", "description": "ISO UTC time the sick call was made"},
          "pairing_id": {"type": "string", "description": "optional: scope to this pairing only"}},
          "required": ["crew_id", "from_date"]}},
+    # ---------- Tier 4: ACTIONS (human-in-the-loop) ----------
+    {"name": "propose_record_sick_call",
+     "description": "ACTION (requires user approval): propose marking a crew member sick from a date. Call this PROACTIVELY whenever a sick call is reported (not hypothetical), alongside simulate_sick_call and recommend_cover. Updates crew status and removes their reserve days once the USER approves. Never applied automatically — tell the user to click Yes/approve.",
+     "parameters": {"type": "object", "properties": {
+         "crew_id": {"type": "string"}, "from_date": {"type": "string"}},
+         "required": ["crew_id", "from_date"]}},
+    {"name": "propose_apply_cover",
+     "description": "ACTION (requires user approval): propose replacing out_crew_id with in_crew_id on a pairing. Call this IMMEDIATELY when the user picks one of the recommend_cover options. All 7 legality rules plus rank/status are re-checked at apply time; illegal assignments are refused. Never applied automatically — tell the user to click Yes/approve.",
+     "parameters": {"type": "object", "properties": {
+         "pairing_id": {"type": "string"},
+         "out_crew_id": {"type": "string", "description": "crew member being replaced"},
+         "in_crew_id": {"type": "string", "description": "crew member taking over"},
+         "from_date": {"type": "string", "description": "optional YYYY-MM-DD"}},
+         "required": ["pairing_id", "out_crew_id", "in_crew_id"]}},
+    {"name": "propose_cancel_pairing_flights",
+     "description": "ACTION (requires user approval): propose cancelling a pairing's flight legs from a date (last-resort option). Never applied automatically — tell the user to click Yes/approve.",
+     "parameters": {"type": "object", "properties": {
+         "pairing_id": {"type": "string"}, "from_date": {"type": "string"}},
+         "required": ["pairing_id", "from_date"]}},
+    {"name": "get_change_log",
+     "description": "List all database changes applied so far (approved actions with before/after detail). Empty after a revert to the original database.",
+     "parameters": {"type": "object", "properties": {}}},
 ]
+
+
+def _propose(action):
+    from . import actions as A
+
+    def _fn(**params):
+        label = A.REGISTRY[action][1]
+        detail = ", ".join(f"{k}={v}" for k, v in params.items())
+        return A.propose(action, params, f"{label}: {detail}")
+    return _fn
+
+
+def _get_change_log():
+    from . import actions as A
+    return {"changes_applied": A.change_log()}
 
 DISPATCH = {
     "get_reserves": L.get_reserves,
@@ -144,6 +181,10 @@ DISPATCH = {
     "earliest_next_report": S.earliest_next_report,
     "get_duty_totals": S.get_duty_totals,
     "recommend_cover": recommend_cover,
+    "propose_record_sick_call": _propose("record_sick_call"),
+    "propose_apply_cover": _propose("apply_cover"),
+    "propose_cancel_pairing_flights": _propose("cancel_pairing_flights"),
+    "get_change_log": _get_change_log,
 }
 
 

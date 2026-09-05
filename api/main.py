@@ -11,6 +11,7 @@ Multi-tab:  each browser tab creates/loads its own session id.
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+from . import actions as actions_store
 from . import sessions as store
 from .agent import run_turn, split_spoken
 
@@ -106,3 +107,39 @@ def session_chat(sid: str, req: SessionChatRequest):
     if s["title"] == "New chat":  # auto-title from first message
         store.rename_session(sid, req.message[:60])
     return {"session_id": sid, "answer": answer, "spoken_summary": spoken, "tool_trace": trace}
+
+
+# ---- agentic actions (human-in-the-loop: nothing runs without approval) ----
+@app.get("/actions")
+def pending_actions(session_id: str = None):
+    return actions_store.list_pending(session_id)
+
+
+@app.post("/actions/{aid}/approve")
+def approve_action(aid: str):
+    r = actions_store.approve(aid)
+    if r.get("error"):
+        raise HTTPException(404 if r["error"] == "action not found" else 409, r["error"])
+    return r
+
+
+@app.post("/actions/{aid}/reject")
+def reject_action(aid: str):
+    r = actions_store.reject(aid)
+    if r.get("error"):
+        raise HTTPException(404 if r["error"] == "action not found" else 409, r["error"])
+    return r
+
+
+@app.get("/changes")
+def get_change_log():
+    return actions_store.change_log()
+
+
+@app.post("/admin/revert")
+def revert_database():
+    """Restore crewops.db from the pristine crewops_bkp.db and clear the change log."""
+    r = actions_store.revert()
+    if r.get("error"):
+        raise HTTPException(409, r["error"])
+    return r
