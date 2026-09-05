@@ -1,0 +1,43 @@
+name: Deploy backend to EC2
+
+on:
+  push:
+    branches: [main, sanjay_mvp]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-ec2
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -e
+            cd ~/aivengers
+            git fetch origin ${{ github.ref_name }}
+            git checkout ${{ github.ref_name }}
+            git reset --hard origin/${{ github.ref_name }}
+            .venv/bin/pip install -r requirements.txt --quiet
+            # write .env from GitHub Secrets (SQLite crewops.db stays on the instance)
+            cat > .env <<'EOF'
+            AI_API_KEY=${{ secrets.AI_API_KEY }}
+            AI_BASE_URL=${{ secrets.AI_BASE_URL }}
+            AI_MODEL=${{ secrets.AI_MODEL }}
+            EOF
+            chmod 600 .env
+            sudo systemctl restart crewops
+            sleep 3
+            curl -sf localhost:8000/health
+
+      - name: Verify from outside
+        run: |
+          curl -sf --max-time 15 http://${{ secrets.EC2_HOST }}:8000/health
