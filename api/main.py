@@ -8,14 +8,25 @@ History:    GET|DELETE /sessions/{sid}/messages
 Chat:       POST /sessions/{sid}/chat  {"message":"..."}  (server keeps history)
 Multi-tab:  each browser tab creates/loads its own session id.
 """
+import os
+
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from . import sessions as store
 from .agent import run_turn, split_spoken
 
 app = FastAPI(title="Agentic Crew Ops Advisor")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[FRONTEND_URL],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class ChatRequest(BaseModel):
     messages: list  # [{"role": "user"|"assistant", "content": str}, ...]
@@ -98,11 +109,17 @@ def session_chat(sid: str, req: SessionChatRequest):
     s = store.get_session(sid)
     if not s:
         raise HTTPException(404, "session not found")
-    msgs = store.history_as_llm_messages(sid) + [{"role": "user", "content": req.message}]
-    text, trace = run_turn(msgs)
-    answer, spoken = split_spoken(text)
+    # Save the user turn before model inference. This preserves history even
+    # when an upstream model provider is unavailable or rejects a request.
     store.add_message(sid, "user", req.message)
-    store.add_message(sid, "assistant", answer, spoken, trace)
-    if s["title"] == "New chat":  # auto-title from first message
+    if s["title"] == "New chat":
         store.rename_session(sid, req.message[:60])
+
+    try:
+        text, trace = run_turn(store.history_as_llm_messages(sid))
+    except Exception as exc:
+        raise HTTPException(502, f"The AI provider could not complete the request: {exc}") from exc
+
+    answer, spoken = split_spoken(text)
+    store.add_message(sid, "assistant", answer, spoken, trace)
     return {"session_id": sid, "answer": answer, "spoken_summary": spoken, "tool_trace": trace}
