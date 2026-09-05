@@ -1,0 +1,5 @@
+openai>=1.40
+fastapi>=0.110
+uvicorn>=0.29
+streamlit>=1.36
+streamlit-mic-recorder>=0.0.8
