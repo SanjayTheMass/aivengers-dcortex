@@ -6,14 +6,15 @@ set -euo pipefail
 REPO_URL="${1:?Usage: setup-ec2.sh <git-repo-url>}"
 APP_DIR="$HOME/aivengers"
 
-sudo yum install -y git python3.12 python3.12-pip 2>/dev/null || sudo apt-get update -y && sudo apt-get install -y git python3 python3-venv python3-pip
+sudo yum install -y git python3.12 python3.12-pip 2>/dev/null || { sudo apt-get update -y && sudo apt-get install -y git python3 python3-venv python3-pip; }
 
 if [ ! -d "$APP_DIR/.git" ]; then
   git clone "$REPO_URL" "$APP_DIR"
 fi
 cd "$APP_DIR"
 
-python3 -m venv .venv
+PY=$(command -v python3.12 || command -v python3)
+"$PY" -m venv .venv
 .venv/bin/pip install --upgrade pip
 .venv/bin/pip install -r requirements.txt
 
